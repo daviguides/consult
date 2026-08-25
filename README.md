@@ -79,7 +79,6 @@ Every consultation enforces:
 | Plugin | Relationship |
 |--------|-------------|
 | [arche](https://github.com/daviguides/arche) | Behavioral principles that govern consultation discipline |
-| [dao](https://github.com/daviguides/dao) | Workflow management; consult integrates with dao sessions |
 
 ## Project Structure
 
