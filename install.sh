@@ -193,6 +193,12 @@ setup_marketplace() {
   spinner $pid "Setting up marketplace..."
   wait $pid && status_ok "Marketplace configured" || status_info "Marketplace already configured"
 
+  # Update marketplace cache (required for newly added plugins)
+  claude plugin marketplace update daviguides >/dev/null 2>&1 &
+  pid=$!
+  spinner $pid "Updating marketplace cache..."
+  wait $pid && status_ok "Marketplace cache updated" || status_info "Cache update skipped"
+
   # Install plugin
   claude plugin install "$PLUGIN_IDENTIFIER" >/dev/null 2>&1 &
   pid=$!
