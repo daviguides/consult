@@ -1,0 +1,11 @@
+{
+  "name": "consult",
+  "version": "0.1.0",
+  "description": "Second-opinion consultations across models and CLI harnesses",
+  "author": {
+    "name": "Davi Guides",
+    "url": "https://github.com/daviguides"
+  },
+  "repository": "https://github.com/daviguides/consult",
+  "license": "MIT"
+}
