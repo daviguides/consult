@@ -6,7 +6,7 @@ description: |
   inheriting session context (fork) or via external CLI (agy/kimi).
 
   Supported targets: opus, fable, kimi, agy, codex, all.
-  - opus/fable: Agent fork with model override, CLI fallback.
+  - opus/fable: Native subagent inside Claude Code when model selection is supported; Claude CLI elsewhere.
   - kimi: Kimi Code CLI (`kimi -p` with `-m kimi-code/k3`).
   - agy: Antigravity CLI (`agy -p` with `--model "Gemini 3.5 Flash (High)"`).
   - codex: OpenAI Codex CLI (`codex exec --model gpt-6-astra -c 'model_reasoning_effort="low"'`). Requires codex CLI installed.
@@ -53,8 +53,8 @@ Parse $ARGUMENTS to determine which consultant(s) to use:
 
 | Argument | Target | Method |
 |----------|--------|--------|
-| `opus` | Claude Opus 5 | Agent fork (`model: "opus"`), CLI fallback |
-| `fable` | Claude Fable 5 | Agent fork (`model: "fable"`), CLI fallback |
+| `opus` | Claude Opus | Claude Code native subagent when supported; otherwise `claude -p --model opus` |
+| `fable` | Claude Fable | Claude Code native subagent when supported; otherwise `claude -p --model fable` |
 | `kimi` | Kimi K3 (Moonshot) | CLI: `kimi -p ... -m kimi-code/k3` |
 | `agy` | Gemini 3.5 Flash | CLI: `agy -p ... --model "Gemini 3.5 Flash (High)"` |
 | `codex` | OpenAI Codex | CLI: `codex exec --model gpt-6-astra -c 'model_reasoning_effort="low"' ...` (requires codex CLI) |
@@ -92,26 +92,47 @@ The user provides the question/context. The skill wraps it with the role clause 
 
 ## Step 3: Execute Consultation
 
-### For opus/fable (fork-first)
+### For opus/fable (route by host environment)
 
-Try Agent fork with model override first:
+Determine the host from the session's runtime identity and exposed tool schemas.
+The presence of `claude` on PATH only establishes CLI availability; it does not
+mean the current agent is running inside Claude Code.
 
-```
-Agent({
-  subagent_type: "fork",
-  model: "<opus|fable>",
-  name: "<model>-consult",
-  prompt: "<built prompt>"
-})
-```
+- **Inside Claude Code:** use its native Agent tool only when the exposed schema
+  supports explicit selection of the requested model (`opus` or `fable`). Use an
+  available subagent type; do not assume a `fork` type exists. Inherit context
+  only if the tool supports it; otherwise include the full consultation prompt.
+  If model selection is unsupported or rejected, use the CLI path below.
+- **Inside Codex or another host, or if the host is uncertain:** go directly to
+  the Claude CLI. Do not attempt to select Anthropic models through that host's
+  native subagent tool.
 
-If fork model override is ignored (responds as parent model), fall back to CLI:
+Use tool/runtime metadata when available to verify model selection. An agent's
+self-reported identity is not evidence of its actual model. If metadata is
+unavailable, report the requested model without claiming it was verified.
+
+#### Claude CLI path
+
+Check `claude` is installed. If absent, report "claude CLI not installed" and
+skip that target. Run the selected command non-interactively:
 
 ```bash
-claude -p "<built prompt>" --model claude-<opus-5|fable-5>
+claude -p --model opus --tools "" --strict-mcp-config "<built prompt>"
+# For the fable target instead:
+claude -p --model fable --tools "" --strict-mcp-config "<built prompt>"
 ```
 
+Use the alias matching the requested target; preserve an explicit full model ID
+if the user supplies one. If the account or CLI rejects the requested model,
+report that target as unavailable instead of substituting another model.
+
 CLI safety: run with cwd OUTSIDE the project repo. Do NOT pass `--add-dir`.
+`--tools ""` disables built-in tools and `--strict-mcp-config` excludes configured
+MCP servers. Include all relevant context in the prompt; the CLI session does
+not inherit the parent conversation. Pass the prompt through a structured
+argument or stdin with proper shell quoting, never unescaped interpolation.
+If Claude Code rejects a nested CLI session, report the limitation rather than
+clearing its nesting guard or bypassing it.
 
 ### For kimi (CLI only)
 
@@ -146,7 +167,7 @@ or equivalent). If not available, report "codex CLI not installed" and skip.
 
 ### For all (parallel fan-out)
 
-Launch all available targets in parallel (multiple Agent calls in one message for forks, sequential CLI calls for kimi/agy). Collect all responses.
+Apply the host-routing rules above independently to opus and fable. Launch available targets in parallel where the host supports it, using native agents only on the eligible Claude Code path and CLI calls for the remaining targets. Collect all responses.
 
 ## Step 4: Post-Consultation Safety Check
 
