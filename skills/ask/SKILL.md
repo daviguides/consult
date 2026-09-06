@@ -9,7 +9,7 @@ description: |
   - opus/fable: Agent fork with model override, CLI fallback.
   - kimi: Kimi Code CLI (`kimi -p` with `-m kimi-code/k3`).
   - agy: Antigravity CLI (`agy -p` with `--model "Gemini 3.5 Flash (High)"`).
-  - codex: OpenAI Codex CLI (`codex -p`). Requires codex CLI installed.
+  - codex: OpenAI Codex CLI (`codex exec --model gpt-6-astra -c 'model_reasoning_effort="low"'`). Requires codex CLI installed.
   - all: parallel fan-out to every available target.
 
   AUTOMATIC TRIGGERS (proactive, model decides -- agy + kimi only):
@@ -57,7 +57,7 @@ Parse $ARGUMENTS to determine which consultant(s) to use:
 | `fable` | Claude Fable 5 | Agent fork (`model: "fable"`), CLI fallback |
 | `kimi` | Kimi K3 (Moonshot) | CLI: `kimi -p ... -m kimi-code/k3` |
 | `agy` | Gemini 3.5 Flash | CLI: `agy -p ... --model "Gemini 3.5 Flash (High)"` |
-| `codex` | OpenAI Codex | CLI: `codex -p ...` (requires codex CLI) |
+| `codex` | OpenAI Codex | CLI: `codex exec --model gpt-6-astra -c 'model_reasoning_effort="low"' ...` (requires codex CLI) |
 | `all` | All of the above | Parallel fan-out |
 
 If no argument, default to agy + kimi (the auto-trigger pair).
@@ -133,10 +133,14 @@ Safety: use `--sandbox` flag OR run with cwd OUTSIDE the project repo.
 ### For codex (CLI only)
 
 ```bash
-codex -p "<built prompt>"
+codex exec --model gpt-6-astra -c 'model_reasoning_effort="low"' \
+  --sandbox read-only --skip-git-repo-check "<built prompt>"
 ```
 
-Safety: run with cwd OUTSIDE the project repo.
+Use `gpt-6-astra` with reasoning effort `low` for Codex consultations.
+`exec` runs non-interactively; `-p` selects a configuration profile, not a prompt.
+Safety: run with cwd OUTSIDE the project repo. `--skip-git-repo-check` allows
+that location, and `--sandbox read-only` prevents workspace writes.
 Requires the OpenAI Codex CLI to be installed (`npm install -g @openai/codex`
 or equivalent). If not available, report "codex CLI not installed" and skip.
 
