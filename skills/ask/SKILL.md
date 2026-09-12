@@ -95,53 +95,55 @@ The user provides the question/context. The skill wraps it with the role clause 
 
 ## Step 3: Execute Consultation
 
-### MANDATORY: Background Mode for CLI Calls
+### MANDATORY: nohup for All CLI Calls
 
-All CLI calls to external harnesses (agy, kimi, codex, claude) MUST use the
-Bash tool with `run_in_background: true`. These harnesses are agentic and
-routinely take 2-5+ minutes to produce output. Synchronous Bash calls hit the
-timeout ceiling (default 120s, max 600s) and kill the process before the
-harness finishes, resulting in empty or partial output.
+All CLI harness calls (agy, kimi, codex, claude) MUST use `nohup` so the
+process **survives Claude Code session end**. Redirect output to the report
+file and capture the PID:
 
-**Execution flow:**
-1. Launch the CLI command with `run_in_background: true`.
-2. Wait for the background task notification (arrives automatically).
-3. Read the output file from the notification to get the consultant's response.
+```bash
+nohup <command> > {output_path} 2>&1 &
+echo $!   # capture PID for monitoring
+```
 
-This applies to every target that uses CLI: agy, kimi, codex, and the
-`claude -p` fallback path for opus/fable. Native Claude Code subagents
-(Agent tool) are not affected -- they have their own completion mechanism.
+**Output path**: default `/tmp/consult-report-{target}.md`. If the user
+specifies a custom directory, write there instead (e.g.
+`/path/to/audits/consult-report-agy.md`).
 
-#### Timeout Limits
+After launching, set up a **Monitor** to get notified when the process finishes:
 
-`run_in_background` itself has **no time limit** from Claude Code's side --
-the process runs until it finishes. The synchronous Bash timeout (default 120s,
-max 600s) does not apply to background tasks.
+```
+Monitor({
+  command: "while kill -0 <PID> 2>/dev/null; do sleep 10; done; echo '{target} consultation finished: {output_path}'",
+  description: "{target} consultation completion",
+  timeout_ms: 3600000
+})
+```
 
-The real blocker is **agy's print timeout in headless mode**: agy kills itself
-after 5 min without stdout output (default `--print-timeout`). Fix: pass
-`--print-timeout 1h` (15 min) in the agy command. This flag is documented at
-https://antigravity.google/docs/cli/headless and accepts Go duration format (e.g. `5m`, `15m`, `1h`).
+When the Monitor fires, read `{output_path}` to collect results.
 
-| Harness | Headless behavior | Fix |
-|---------|-------------------|-----|
-| agy | print timeout (default 5 min, no incremental output in headless) | `--print-timeout 1h` |
-| kimi | No known print timeout issue | None needed |
-| codex | No known print timeout issue | None needed |
-| claude | No known print timeout issue | None needed |
+Native Claude Code subagents (Agent tool for opus/fable) are not affected --
+they have their own completion mechanism and do not need nohup.
 
-**All targets including agy work with `run_in_background: true`** when the
-print timeout is set high enough.
+### Headless Timeout Reference
 
-**Last resort (agy still timing out):** save the prompt to a file and instruct
-the user to run interactively via the `!` prefix in Claude Code:
+Each harness behaves differently in headless (`-p` / `exec`) mode:
 
+| Harness | Print timeout | Default | Configurable? | Action needed |
+|---------|--------------|---------|---------------|---------------|
+| **agy** | `--print-timeout` CLI flag | 5m | Yes (Go duration: `5m`, `1h`) | `--print-timeout 1h` |
+| **claude** | None | Unlimited | N/A | None |
+| **codex** | None documented | Unlimited | N/A | None |
+| **kimi** | `print_wait_ceiling_s` in config | ~24.8 days | Yes (config.toml) | None (default is fine) |
+
+Only **agy** needs an explicit timeout flag. The others run until completion.
+agy docs: https://antigravity.google/docs/cli/headless
+
+**Last resort** (if nohup + Monitor still fails for a target): save the prompt
+to a file and instruct the user to run interactively via `!` in Claude Code:
 ```
 ! agy --sandbox --dangerously-skip-permissions --model "<model>" -p "$(cat <prompt-file>)"
 ```
-
-Interactive mode produces incremental output, resetting the print timeout
-continuously. No time limit.
 
 ### For opus/fable (route by host environment)
 
@@ -165,12 +167,16 @@ unavailable, report the requested model without claiming it was verified.
 #### Claude CLI path
 
 Check `claude` is installed. If absent, report "claude CLI not installed" and
-skip that target. Run the selected command non-interactively:
+skip that target. Launch with nohup:
 
 ```bash
-claude -p --model opus --tools "" --strict-mcp-config "<built prompt>"
+nohup claude -p --model opus --tools "" --strict-mcp-config "<built prompt>" \
+  > /tmp/consult-report-opus.md 2>&1 &
+echo $!
 # For the fable target instead:
-claude -p --model fable --tools "" --strict-mcp-config "<built prompt>"
+nohup claude -p --model fable --tools "" --strict-mcp-config "<built prompt>" \
+  > /tmp/consult-report-fable.md 2>&1 &
+echo $!
 ```
 
 Use the alias matching the requested target; preserve an explicit full model ID
@@ -188,7 +194,9 @@ clearing its nesting guard or bypassing it.
 ### For kimi (CLI only)
 
 ```bash
-kimi -p "<built prompt>" -m kimi-code/k3
+nohup kimi -p "<built prompt>" -m kimi-code/k3 \
+  > /tmp/consult-report-kimi.md 2>&1 &
+echo $!
 ```
 
 Safety: run with cwd OUTSIDE the project repo. Do NOT pass `--add-dir`.
@@ -197,19 +205,25 @@ Do NOT use `-y`/`--yolo` or `--auto`.
 ### For agy (CLI only)
 
 ```bash
-agy --print-timeout 1h -p "<built prompt>" --model "Gemini 3.8 Flash (High)"
+nohup agy --print-timeout 1h --sandbox --dangerously-skip-permissions \
+  --model "Gemini 3.8 Flash (High)" -p "<built prompt>" \
+  > /tmp/consult-report-agy.md 2>&1 &
+echo $!
 ```
 
 `--print-timeout 1h` prevents the default 5-min headless timeout from killing
 the process before it finishes.
 
-Safety: use `--sandbox` flag OR run with cwd OUTSIDE the project repo.
+Safety: `--sandbox` prevents project writes. Also run with cwd OUTSIDE the
+project repo when possible.
 
 ### For codex (CLI only)
 
 ```bash
-codex exec --model gpt-6-astra -c 'model_reasoning_effort="low"' \
-  --sandbox read-only --skip-git-repo-check "<built prompt>"
+nohup codex exec --model gpt-6-astra -c 'model_reasoning_effort="low"' \
+  --sandbox read-only --skip-git-repo-check "<built prompt>" \
+  > /tmp/consult-report-codex.md 2>&1 &
+echo $!
 ```
 
 Use `gpt-6-astra` with reasoning effort `low` for Codex consultations.
@@ -221,7 +235,10 @@ or equivalent). If not available, report "codex CLI not installed" and skip.
 
 ### For all (parallel fan-out)
 
-Apply the host-routing rules above independently to opus and fable. Launch available targets in parallel where the host supports it, using native agents only on the eligible Claude Code path and CLI calls for the remaining targets. Collect all responses.
+Apply the host-routing rules above independently to opus and fable. Launch all
+CLI targets with nohup in a single Bash call (each with its own output file and
+PID), then set up one Monitor per PID. Use native agents only on the eligible
+Claude Code path. Collect all responses from their respective report files.
 
 ## Step 4: Post-Consultation Safety Check
 
@@ -235,13 +252,17 @@ Any tree change not made by you is from the consultant -- revert before continui
 
 ## Step 5: Collect Results
 
-The consultant writes a detailed report to `/tmp/consult-report-{target}.md`.
-Read the report file as the **primary** source of results. CLI stdout is the
-fallback if the report file was not created.
+The nohup redirect captures all harness output to `{output_path}`. The
+consultant is also instructed to write structured findings to the same path.
+Read the report file as the **primary** source of results.
 
 ```bash
 cat /tmp/consult-report-agy.md   # or -kimi, -opus, -fable, -codex
 ```
+
+**Custom output directory**: if the user specified a directory (e.g.
+`output:/path/to/audits/`), the report lives at
+`/path/to/audits/consult-report-{target}.md` instead of `/tmp/`.
 
 ## Step 6: Adoption Protocol
 
