@@ -8,7 +8,7 @@ description: |
   Supported targets: opus, fable, kimi, agy, codex, all.
   - opus/fable: Native subagent inside Claude Code when model selection is supported; Claude CLI elsewhere.
   - kimi: Kimi Code CLI (`kimi -p` with `-m kimi-code/k3`).
-  - agy: Antigravity CLI (`agy --print-timeout 15m -p` with `--model "Gemini 3.8 Flash (High)"`).
+  - agy: Antigravity CLI (`agy --print-timeout 1h -p` with `--model "Gemini 3.8 Flash (High)"`).
   - codex: OpenAI Codex CLI (`codex exec --model gpt-6-astra -c 'model_reasoning_effort="low"'`). Requires codex CLI installed.
   - all: parallel fan-out to every available target.
 
@@ -56,7 +56,7 @@ Parse $ARGUMENTS to determine which consultant(s) to use:
 | `opus` | Claude Opus | Claude Code native subagent when supported; otherwise `claude -p --model opus` |
 | `fable` | Claude Fable | Claude Code native subagent when supported; otherwise `claude -p --model fable` |
 | `kimi` | Kimi K3 (Moonshot) | CLI: `kimi -p ... -m kimi-code/k3` |
-| `agy` | Gemini 3.8 Flash | CLI: `agy --print-timeout 15m -p ... --model "Gemini 3.8 Flash (High)"` |
+| `agy` | Gemini 3.8 Flash | CLI: `agy --print-timeout 1h -p ... --model "Gemini 3.8 Flash (High)"` |
 | `codex` | OpenAI Codex | CLI: `codex exec --model gpt-6-astra -c 'model_reasoning_effort="low"' ...` (requires codex CLI) |
 | `all` | All of the above | Parallel fan-out |
 
@@ -68,9 +68,12 @@ Every consultation prompt follows this structure, in order:
 
 1. **Role clause** (mandatory, always first line):
    ```
-   You are a CONSULTANT only. Do NOT write, edit, create or delete any files.
-   Do NOT execute any actions. Respond exclusively with analysis and
-   recommendations in text.
+   You are a CONSULTANT only. Do NOT write, edit, create or delete any
+   project files. Do NOT execute any actions beyond analysis.
+   At the end of your analysis, write a detailed markdown report of all
+   findings to /tmp/consult-report-{target}.md (replace {target} with your
+   model name, e.g. /tmp/consult-report-agy.md). This report is your
+   primary deliverable.
    ```
 
 2. **System context**: the relevant architecture (5-10 lines).
@@ -117,12 +120,12 @@ max 600s) does not apply to background tasks.
 
 The real blocker is **agy's print timeout in headless mode**: agy kills itself
 after 5 min without stdout output (default `--print-timeout`). Fix: pass
-`--print-timeout 15m` (15 min) in the agy command. This flag is documented at
+`--print-timeout 1h` (15 min) in the agy command. This flag is documented at
 https://antigravity.google/docs/cli/headless and accepts Go duration format (e.g. `5m`, `15m`, `1h`).
 
 | Harness | Headless behavior | Fix |
 |---------|-------------------|-----|
-| agy | print timeout (default 5 min, no incremental output in headless) | `--print-timeout 15m` |
+| agy | print timeout (default 5 min, no incremental output in headless) | `--print-timeout 1h` |
 | kimi | No known print timeout issue | None needed |
 | codex | No known print timeout issue | None needed |
 | claude | No known print timeout issue | None needed |
@@ -194,10 +197,10 @@ Do NOT use `-y`/`--yolo` or `--auto`.
 ### For agy (CLI only)
 
 ```bash
-agy --print-timeout 15m -p "<built prompt>" --model "Gemini 3.8 Flash (High)"
+agy --print-timeout 1h -p "<built prompt>" --model "Gemini 3.8 Flash (High)"
 ```
 
-`--print-timeout 15m` prevents the default 5-min headless timeout from killing
+`--print-timeout 1h` prevents the default 5-min headless timeout from killing
 the process before it finishes.
 
 Safety: use `--sandbox` flag OR run with cwd OUTSIDE the project repo.
@@ -230,7 +233,17 @@ git status
 
 Any tree change not made by you is from the consultant -- revert before continuing.
 
-## Step 5: Adoption Protocol
+## Step 5: Collect Results
+
+The consultant writes a detailed report to `/tmp/consult-report-{target}.md`.
+Read the report file as the **primary** source of results. CLI stdout is the
+fallback if the report file was not created.
+
+```bash
+cat /tmp/consult-report-agy.md   # or -kimi, -opus, -fable, -codex
+```
+
+## Step 6: Adoption Protocol
 
 Before testing any suggestion from the consultant:
 
@@ -238,7 +251,7 @@ Before testing any suggestion from the consultant:
 2. **Adopt only what's testable**: test each input one at a time.
 3. **Non-actionable warnings**: log in session log for future reference.
 
-## Step 6: Report
+## Step 7: Report
 
 Present consultant output with:
 - Source model identified
