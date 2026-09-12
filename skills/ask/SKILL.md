@@ -109,6 +109,33 @@ This applies to every target that uses CLI: agy, kimi, codex, and the
 `claude -p` fallback path for opus/fable. Native Claude Code subagents
 (Agent tool) are not affected -- they have their own completion mechanism.
 
+#### Timeout Limits
+
+| Limit | Source | Value | Configurable |
+|-------|--------|-------|-------------|
+| Bash `run_in_background` hard cap | Claude Code | 600s (10 min) | No |
+| agy print timeout (headless) | agy CLI | 5 min without output | No |
+
+`run_in_background` has a 600s hard cap that cannot be extended. Additionally,
+agy has its own "print timeout" of 5 minutes without output -- in headless mode
+agy produces no incremental output, so this internal timeout fires before the
+Bash 600s limit, resulting in `[agy] print timeout after 5m0s`.
+
+**When background mode is not enough:** if the harness is expected to take
+longer than 10 minutes, or if it hits a print timeout in headless mode (agy
+with browser/devtools skills routinely exceeds both limits), instruct the user
+to run it interactively via the `!` prefix in the Claude Code prompt. Save the
+prompt to a file and provide the command:
+
+```
+! agy --sandbox --dangerously-skip-permissions --model "<model>" -p "$(cat <prompt-file>)"
+```
+
+**Default recommendation:** background mode is still correct for most calls --
+kimi, codex, and claude tend to finish well within 600s. Reserve the
+interactive fallback for agy with heavy skills (chrome-devtools,
+modern-web-guidance) or any call expected to exceed 5 minutes.
+
 ### For opus/fable (route by host environment)
 
 Determine the host from the session's runtime identity and exposed tool schemas.
