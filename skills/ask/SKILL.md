@@ -8,7 +8,7 @@ description: |
   Supported targets: opus, fable, kimi, agy, codex, all.
   - opus/fable: Native subagent inside Claude Code when model selection is supported; Claude CLI elsewhere.
   - kimi: Kimi Code CLI (`kimi -p` with `-m kimi-code/k3`).
-  - agy: Antigravity CLI (`agy -p` with `--model "Gemini 3.5 Flash (High)"`).
+  - agy: Antigravity CLI (`agy --print-timeout 15m -p` with `--model "Gemini 3.8 Flash (High)"`).
   - codex: OpenAI Codex CLI (`codex exec --model gpt-6-astra -c 'model_reasoning_effort="low"'`). Requires codex CLI installed.
   - all: parallel fan-out to every available target.
 
@@ -56,7 +56,7 @@ Parse $ARGUMENTS to determine which consultant(s) to use:
 | `opus` | Claude Opus | Claude Code native subagent when supported; otherwise `claude -p --model opus` |
 | `fable` | Claude Fable | Claude Code native subagent when supported; otherwise `claude -p --model fable` |
 | `kimi` | Kimi K3 (Moonshot) | CLI: `kimi -p ... -m kimi-code/k3` |
-| `agy` | Gemini 3.5 Flash | CLI: `agy -p ... --model "Gemini 3.5 Flash (High)"` |
+| `agy` | Gemini 3.8 Flash | CLI: `agy --print-timeout 15m -p ... --model "Gemini 3.8 Flash (High)"` |
 | `codex` | OpenAI Codex | CLI: `codex exec --model gpt-6-astra -c 'model_reasoning_effort="low"' ...` (requires codex CLI) |
 | `all` | All of the above | Parallel fan-out |
 
@@ -115,31 +115,30 @@ This applies to every target that uses CLI: agy, kimi, codex, and the
 the process runs until it finishes. The synchronous Bash timeout (default 120s,
 max 600s) does not apply to background tasks.
 
-The real problem is **harness-specific timeouts in headless mode**:
+The real blocker is **agy's print timeout in headless mode**: agy kills itself
+after 5 min without stdout output (default `--print-timeout`). Fix: pass
+`--print-timeout 15m` (15 min) in the agy command. This flag is documented at
+https://antigravity.google/docs/cli/headless and accepts Go duration format (e.g. `5m`, `15m`, `1h`).
 
-| Harness | Headless behavior | Practical limit |
-|---------|-------------------|-----------------|
-| agy | "print timeout" fires after 5 min without output; headless produces no incremental output, so this always triggers | ~5 min |
-| kimi | No known print timeout issue | No limit |
-| codex | No known print timeout issue | No limit |
-| claude | No known print timeout issue | No limit |
+| Harness | Headless behavior | Fix |
+|---------|-------------------|-----|
+| agy | print timeout (default 5 min, no incremental output in headless) | `--print-timeout 15m` |
+| kimi | No known print timeout issue | None needed |
+| codex | No known print timeout issue | None needed |
+| claude | No known print timeout issue | None needed |
 
-agy with heavy skills (chrome-devtools, modern-web-guidance) routinely exceeds
-the 5-min print timeout. Result: `[agy] print timeout after 5m0s` with empty
-output.
+**All targets including agy work with `run_in_background: true`** when the
+print timeout is set high enough.
 
-**When background mode is not enough (agy):** save the prompt to a file and
-instruct the user to run interactively via the `!` prefix in Claude Code:
+**Last resort (agy still timing out):** save the prompt to a file and instruct
+the user to run interactively via the `!` prefix in Claude Code:
 
 ```
 ! agy --sandbox --dangerously-skip-permissions --model "<model>" -p "$(cat <prompt-file>)"
 ```
 
-Interactive mode produces incremental output, resetting the print timeout.
-No time limit in this mode.
-
-**Default recommendation:** `run_in_background` is correct for kimi, codex,
-and claude. For agy, use the interactive fallback via `!`.
+Interactive mode produces incremental output, resetting the print timeout
+continuously. No time limit.
 
 ### For opus/fable (route by host environment)
 
@@ -195,8 +194,11 @@ Do NOT use `-y`/`--yolo` or `--auto`.
 ### For agy (CLI only)
 
 ```bash
-agy -p "<built prompt>" --model "Gemini 3.5 Flash (High)"
+agy --print-timeout 15m -p "<built prompt>" --model "Gemini 3.8 Flash (High)"
 ```
+
+`--print-timeout 15m` prevents the default 5-min headless timeout from killing
+the process before it finishes.
 
 Safety: use `--sandbox` flag OR run with cwd OUTSIDE the project repo.
 
