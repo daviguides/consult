@@ -92,6 +92,23 @@ The user provides the question/context. The skill wraps it with the role clause 
 
 ## Step 3: Execute Consultation
 
+### MANDATORY: Background Mode for CLI Calls
+
+All CLI calls to external harnesses (agy, kimi, codex, claude) MUST use the
+Bash tool with `run_in_background: true`. These harnesses are agentic and
+routinely take 2-5+ minutes to produce output. Synchronous Bash calls hit the
+timeout ceiling (default 120s, max 600s) and kill the process before the
+harness finishes, resulting in empty or partial output.
+
+**Execution flow:**
+1. Launch the CLI command with `run_in_background: true`.
+2. Wait for the background task notification (arrives automatically).
+3. Read the output file from the notification to get the consultant's response.
+
+This applies to every target that uses CLI: agy, kimi, codex, and the
+`claude -p` fallback path for opus/fable. Native Claude Code subagents
+(Agent tool) are not affected -- they have their own completion mechanism.
+
 ### For opus/fable (route by host environment)
 
 Determine the host from the session's runtime identity and exposed tool schemas.
