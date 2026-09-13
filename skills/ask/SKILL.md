@@ -121,9 +121,14 @@ The user provides the question/context. The skill wraps it with the role clause 
 
 ### MANDATORY: nohup for All CLI Calls
 
+**NEVER use Bash tool's `run_in_background` parameter for CLI consultations.**
+It has a default 2-minute timeout that kills long-running generations silently
+(exit code 144 / SIGTERM). Consultations generating HTML or detailed analysis
+routinely exceed 2 minutes.
+
 All CLI harness calls (agy, kimi, codex, claude) MUST use `nohup` so the
-process **survives Claude Code session end**. Redirect output to the report
-file and capture the PID:
+process **survives Claude Code session end AND has no timeout**. Redirect
+output to the report file and capture the PID:
 
 ```bash
 nohup <command> > {output_path} 2>&1 &
