@@ -279,13 +279,31 @@ project repo when possible.
 ### For codex (CLI only)
 
 ```bash
+# Analysis/opinion (default):
 nohup codex exec --model gpt-6-astra -c 'model_reasoning_effort="low"' \
+  --sandbox read-only --skip-git-repo-check "<built prompt>" \
+  > /tmp/consult-report-codex.md 2>&1 &
+echo $!
+
+# File deliverables (HTML, mockups, landing pages):
+nohup codex exec --model gpt-6-astra -c 'model_reasoning_effort="high"' \
   --sandbox read-only --skip-git-repo-check "<built prompt>" \
   > /tmp/consult-report-codex.md 2>&1 &
 echo $!
 ```
 
-Use `gpt-6-astra` with reasoning effort `low` for Codex consultations.
+#### Reasoning effort by consultation type
+
+| Consultation type | `model_reasoning_effort` | Why |
+|-------------------|--------------------------|-----|
+| Analysis, second opinion, code review | `"low"` | Short output, factual, fast |
+| File deliverables (HTML, mockups, design systems, landing pages) | `"high"` | Long structured output, creative, needs full generation capacity |
+
+**Default is `"low"`.** Switch to `"high"` when the deliverable clause (Step 2)
+specifies file output. With `"low"`, Codex truncates or iterates incomplete
+attempts on long-form HTML generation (observed: 131-line design system vs
+1500+ from other models on the same prompt).
+
 `exec` runs non-interactively; `-p` selects a configuration profile, not a prompt.
 Safety: run with cwd OUTSIDE the project repo. `--skip-git-repo-check` allows
 that location, and `--sandbox read-only` prevents workspace writes.
