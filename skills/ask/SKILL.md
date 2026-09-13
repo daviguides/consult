@@ -67,6 +67,8 @@ If no argument, default to agy + kimi (the auto-trigger pair).
 Every consultation prompt follows this structure, in order:
 
 1. **Role clause** (mandatory, always first line):
+
+   **Default (analysis-only):**
    ```
    You are a CONSULTANT only. Do NOT write, edit, create or delete any
    project files. Do NOT execute any actions beyond analysis.
@@ -75,6 +77,28 @@ Every consultation prompt follows this structure, in order:
    model name, e.g. /tmp/consult-report-agy.md). This report is your
    primary deliverable.
    ```
+
+   **With file deliverables (HTML, markdown, etc):**
+   When the consultation requires generating files (mockups, design systems,
+   landing pages, etc), specify an output directory and exact filenames:
+   ```
+   You are a CONSULTANT generating deliverables. Do NOT read, modify, or
+   delete any existing project files. Do NOT execute any actions beyond
+   generating the requested deliverables.
+   Write your output ONLY to the specified output directory:
+     {output_dir}/{target}/
+   Files to generate: {file list with names}
+   Do NOT write anywhere else. Do NOT read other files in the project
+   unless explicitly listed in the prompt as context.
+   ```
+   The coordinator passes the output directory via prompt. Consultants write
+   ONLY to `{output_dir}/{target}/`. For native subagents (opus/fable via
+   Agent tool), they use the Write tool. For CLI targets, the coordinator
+   extracts deliverables from stdout and writes them to the target directory.
+
+   **Safety invariant:** consultants NEVER modify existing files. They create
+   new files only in the designated output directory. `git status` (Step 4)
+   catches violations.
 
 2. **System context**: the relevant architecture (5-10 lines).
 
