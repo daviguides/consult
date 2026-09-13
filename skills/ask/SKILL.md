@@ -8,7 +8,7 @@ description: |
   Supported targets: opus, fable, kimi, agy, codex, all.
   - opus/fable: Native subagent inside Claude Code when model selection is supported; Claude CLI elsewhere.
   - kimi: Kimi Code CLI (`kimi -p` with `-m kimi-code/k3`).
-  - agy: Antigravity CLI (`agy --print-timeout 1h -p` with `--model "Gemini 3.8 Flash (High)"`).
+  - agy: Antigravity CLI (`agy --print-timeout 1h -p` with `--model gemini-3.8-flash-high`).
   - codex: OpenAI Codex CLI (`codex exec --model gpt-6-astra -c 'model_reasoning_effort="low"'`). Requires codex CLI installed.
   - all: parallel fan-out to every available target.
 
@@ -56,7 +56,7 @@ Parse $ARGUMENTS to determine which consultant(s) to use:
 | `opus` | Claude Opus | Claude Code native subagent when supported; otherwise `claude -p --model opus` |
 | `fable` | Claude Fable | Claude Code native subagent when supported; otherwise `claude -p --model fable` |
 | `kimi` | Kimi K3 (Moonshot) | CLI: `kimi -p ... -m kimi-code/k3` |
-| `agy` | Gemini 3.8 Flash | CLI: `agy --print-timeout 1h -p ... --model "Gemini 3.8 Flash (High)"` |
+| `agy` | Gemini 3.8 Flash | CLI: `agy --print-timeout 1h -p ... --model gemini-3.8-flash-high` |
 | `codex` | OpenAI Codex | CLI: `codex exec --model gpt-6-astra -c 'model_reasoning_effort="low"' ...` (requires codex CLI) |
 | `all` | All of the above | Parallel fan-out |
 
@@ -264,11 +264,34 @@ Do NOT use `-y`/`--yolo` or `--auto`.
 ### For agy (CLI only)
 
 ```bash
+# Analysis/opinion (default):
 nohup agy --print-timeout 1h --sandbox --dangerously-skip-permissions \
-  --model "Gemini 3.8 Flash (High)" -p "<built prompt>" \
+  --model gemini-3.8-flash-high --effort low -p "<built prompt>" \
+  > /tmp/consult-report-agy.md 2>&1 &
+echo $!
+
+# File deliverables (HTML, mockups, landing pages):
+nohup agy --print-timeout 1h --sandbox --dangerously-skip-permissions \
+  --model gemini-3.8-flash-high --effort high -p "<built prompt>" \
   > /tmp/consult-report-agy.md 2>&1 &
 echo $!
 ```
+
+#### AGY flags reference
+
+| Flag | Purpose | Values |
+|------|---------|--------|
+| `--model` | Model slug (use `agy models` to list) | `gemini-3.8-flash-high`, etc. |
+| `--effort` | Agent reasoning effort | `low` / `medium` / `high` |
+| `--print-timeout` | Headless timeout before kill | Go duration: `1h`, `30m` |
+
+**Model slug vs display name:** `agy models` shows both columns. Use the slug
+(`gemini-3.8-flash-high`) not the display name (`Gemini 3.8 Flash (High)`) —
+slugs avoid quoting issues and are more robust.
+
+**`--effort` vs model tier:** The "High/Medium/Low" in the model name is the
+model's built-in reasoning tier. `--effort` is a separate agent-level reasoning
+knob. Both matter. For deliverables, use the High tier model AND `--effort high`.
 
 `--print-timeout 1h` prevents the default 5-min headless timeout from killing
 the process before it finishes.
