@@ -119,29 +119,37 @@ The user provides the question/context. The skill wraps it with the role clause 
 
 ## Step 3: Execute Consultation
 
-### MANDATORY: nohup for All CLI Calls
+### MANDATORY: nohup + Monitor for All CLI Calls
 
-**NEVER use Bash tool's `run_in_background` parameter for CLI consultations.**
-It has a default 2-minute timeout that kills long-running generations silently
-(exit code 144 / SIGTERM). Consultations generating HTML or detailed analysis
-routinely exceed 2 minutes.
+#### Why not Bash `run_in_background`?
 
-All CLI harness calls (agy, kimi, codex, claude) MUST use `nohup` so the
-process **survives Claude Code session end AND has no timeout**. Redirect
-output to the report file and capture the PID:
+The Bash tool's `run_in_background` parameter looks convenient but is **wrong
+for consultations**:
+
+1. **Timeout kills the process.** Default is 2 minutes. Even with `timeout:
+   600000` (10 min), an LLM generating 1000+ lines of HTML routinely exceeds
+   it. The process is killed with SIGTERM (exit code 144) and the output is
+   silently truncated — no error, no warning, just incomplete HTML.
+2. **No session survival.** If the Claude Code session ends or compresses
+   context, the background process dies with it.
+3. **No completion signal you control.** You get a task notification, but
+   cannot customize what happens on completion.
+
+`nohup` has none of these problems: no timeout, survives session end, output
+goes to a file you control. Monitor gives you the completion notification.
+
+#### The correct pattern
+
+All CLI harness calls (agy, kimi, codex, claude) MUST use `nohup`:
 
 ```bash
+# 1. Launch with nohup — NO timeout, survives session end
 nohup <command> > {output_path} 2>&1 &
 echo $!   # capture PID for monitoring
 ```
 
-**Output path**: default `/tmp/consult-report-{target}.md`. If the user
-specifies a custom directory, write there instead (e.g.
-`/path/to/audits/consult-report-agy.md`).
-
-After launching, set up a **Monitor** to get notified when the process finishes:
-
 ```
+# 2. Arm Monitor for completion notification
 Monitor({
   command: "while kill -0 <PID> 2>/dev/null; do sleep 10; done; echo '{target} consultation finished: {output_path}'",
   description: "{target} consultation completion",
@@ -149,7 +157,29 @@ Monitor({
 })
 ```
 
-When the Monitor fires, read `{output_path}` to collect results.
+```
+# 3. When Monitor fires, read the output
+Read({file_path: "{output_path}"})
+```
+
+**Output path**: default `/tmp/consult-report-{target}.md`. If the user
+specifies a custom directory, write there instead (e.g.
+`/path/to/audits/consult-report-agy.md`).
+
+#### Anti-pattern reference
+
+```
+❌ WRONG — killed after 2 min, truncated output, exit 144:
+Bash({
+  command: "kimi -p '...' -m kimi-code/k3",
+  run_in_background: true,
+  timeout: 600000
+})
+
+✅ CORRECT — no timeout, survives session, output to file:
+Bash({ command: "nohup kimi -p '...' -m kimi-code/k3 > /tmp/consult-report-kimi.md 2>&1 & echo $!" })
+Monitor({ command: "while kill -0 <PID> ...", timeout_ms: 3600000 })
+```
 
 Native Claude Code subagents (Agent tool for opus/fable) are not affected --
 they have their own completion mechanism and do not need nohup.
