@@ -117,7 +117,7 @@ print_header() {
   box_top
   box_empty
   printf "${CYAN}│${NC}   ${BOLD}C O N S U L T${NC}   Second-opinion protocol        ${CYAN}│${NC}\n"
-  printf "${CYAN}│${NC}                   for Claude Code (v0.2.0)        ${CYAN}│${NC}\n"
+  printf "${CYAN}│${NC}                   for Claude Code (v0.2.1)        ${CYAN}│${NC}\n"
   box_empty
   box_separator
 }
@@ -182,10 +182,61 @@ check_claude_cli() {
   return 0
 }
 
+nuke_stale_cache() {
+  local cache_dir="$CLAUDE_DIR/plugins/cache/daviguides/consult"
+  if [ -d "$cache_dir" ]; then
+    rm -rf "$cache_dir"
+    status_ok "Stale plugin cache purged"
+  fi
+}
+
+fix_installed_plugins_registry() {
+  local registry="$CLAUDE_DIR/plugins/installed_plugins.json"
+  [ -f "$registry" ] || return 0
+
+  local current_version
+  current_version=$(python3 -c "
+import json
+with open('$TMP_DIR/$SOURCE_SUBDIR/.claude-plugin/plugin.json') as f:
+    print(json.load(f)['version'])
+" 2>/dev/null) || return 0
+
+  python3 -c "
+import json, datetime
+
+registry_path = '$registry'
+version = '$current_version'
+cache_path = '$CLAUDE_DIR/plugins/cache/daviguides/consult/' + version
+
+with open(registry_path) as f:
+    data = json.load(f)
+
+plugins = data.get('plugins', {})
+key = 'consult@daviguides'
+now = datetime.datetime.utcnow().strftime('%Y-%m-%dT%H:%M:%S.000Z')
+
+if key in plugins and len(plugins[key]) > 0:
+    entry = plugins[key][0]
+    if entry.get('version') != version or entry.get('installPath') != cache_path:
+        entry['version'] = version
+        entry['installPath'] = cache_path
+        entry['lastUpdated'] = now
+        with open(registry_path, 'w') as f:
+            json.dump(data, f, indent=2)
+        print('UPDATED')
+    else:
+        print('ALREADY_CURRENT')
+else:
+    print('NOT_FOUND')
+" 2>/dev/null
+}
+
 setup_marketplace() {
   if ! check_claude_cli; then
     return 0
   fi
+
+  nuke_stale_cache
 
   # Add marketplace
   claude plugin marketplace add "$MARKETPLACE_URL" >/dev/null 2>&1 &
@@ -204,6 +255,28 @@ setup_marketplace() {
   pid=$!
   spinner $pid "Installing plugin..."
   wait $pid && status_ok "Plugin installed: $PLUGIN_IDENTIFIER" || status_warn "Plugin install failed"
+
+  local result
+  result=$(fix_installed_plugins_registry)
+  if [ "$result" = "UPDATED" ]; then
+    status_ok "Registry updated to current version"
+    local current_version
+    current_version=$(python3 -c "import json; print(json.load(open('$TMP_DIR/$SOURCE_SUBDIR/.claude-plugin/plugin.json'))['version'])" 2>/dev/null)
+    if [ -n "$current_version" ]; then
+      local versioned_cache="$CLAUDE_DIR/plugins/cache/daviguides/consult/$current_version"
+      rm -rf "$CLAUDE_DIR/plugins/cache/daviguides/consult"
+      mkdir -p "$versioned_cache"
+      if command -v rsync >/dev/null 2>&1; then
+        rsync -a "$TMP_DIR/$SOURCE_SUBDIR"/ "$versioned_cache"/ --exclude .git
+      else
+        cp -R "$TMP_DIR/$SOURCE_SUBDIR"/* "$versioned_cache"/
+        cp -R "$TMP_DIR/$SOURCE_SUBDIR"/.claude-plugin "$versioned_cache"/
+      fi
+      status_ok "Cache rebuilt at $current_version"
+    fi
+  elif [ "$result" = "ALREADY_CURRENT" ]; then
+    status_info "Registry already current"
+  fi
 }
 
 box_title() {

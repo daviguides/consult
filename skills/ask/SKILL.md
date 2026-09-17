@@ -8,7 +8,7 @@ description: |
   Supported targets: opus, fable, kimi, agy, codex, all.
   - opus/fable: Native subagent inside Claude Code when model selection is supported; Claude CLI elsewhere.
   - kimi: Kimi Code CLI (`kimi -p` with `-m kimi-code/k3`).
-  - agy: Antigravity CLI (`agy --print-timeout 1h -p` with `--model gemini-3.8-flash-high`).
+  - agy: Antigravity CLI (`agy --print-timeout 1h -p` with `--model gemini-3.8-flash-high`). Always use model slug, never display name. Omit `--effort` flag if no value (empty string = silent failure). Omit `--sandbox` when writing files.
   - codex: OpenAI Codex CLI (`codex exec --model gpt-6-astra -c 'model_reasoning_effort="low"'`). Requires codex CLI installed.
   - all: parallel fan-out to every available target.
 
@@ -264,14 +264,14 @@ Do NOT use `-y`/`--yolo` or `--auto`.
 ### For agy (CLI only)
 
 ```bash
-# Analysis/opinion (default):
+# Analysis/opinion (default — read-only, sandboxed):
 nohup agy --print-timeout 1h --sandbox --dangerously-skip-permissions \
   --model gemini-3.8-flash-high --effort low -p "<built prompt>" \
   > /tmp/consult-report-agy.md 2>&1 &
 echo $!
 
-# File deliverables (HTML, mockups, landing pages):
-nohup agy --print-timeout 1h --sandbox --dangerously-skip-permissions \
+# File deliverables (HTML, mockups, landing pages — needs write access):
+nohup agy --print-timeout 1h --dangerously-skip-permissions \
   --model gemini-3.8-flash-high --effort high -p "<built prompt>" \
   > /tmp/consult-report-agy.md 2>&1 &
 echo $!
@@ -279,19 +279,30 @@ echo $!
 
 #### AGY flags reference
 
-| Flag | Purpose | Values |
-|------|---------|--------|
-| `--model` | Model slug (use `agy models` to list) | `gemini-3.8-flash-high`, etc. |
-| `--effort` | Agent reasoning effort | `low` / `medium` / `high` |
-| `--print-timeout` | Headless timeout before kill | Go duration: `1h`, `30m` |
+| Flag | Purpose | Values | Notes |
+|------|---------|--------|-------|
+| `--model` | Model slug (use `agy models` to list) | `gemini-3.8-flash-high`, etc. | Always use slug, never display name |
+| `--effort` | Agent reasoning effort | `low` / `medium` / `high` | **Omit flag entirely if no value** — empty string causes silent failure |
+| `--print-timeout` | Headless timeout before kill | Go duration: `1h`, `30m` | Default 5m is too short for HTML generation |
+| `--sandbox` | Restrict terminal writes | (flag, no value) | Use for analysis; **omit for file deliverables** (blocks writes) |
+| `--dangerously-skip-permissions` | Auto-approve tool permissions | (flag, no value) | Required in headless mode to prevent interactive prompts |
 
 **Model slug vs display name:** `agy models` shows both columns. Use the slug
 (`gemini-3.8-flash-high`) not the display name (`Gemini 3.8 Flash (High)`) —
-slugs avoid quoting issues and are more robust.
+display names have spaces that break shell quoting and may not be accepted by
+the CLI. Always quote-free slugs.
 
 **`--effort` vs model tier:** The "High/Medium/Low" in the model name is the
 model's built-in reasoning tier. `--effort` is a separate agent-level reasoning
 knob. Both matter. For deliverables, use the High tier model AND `--effort high`.
+**Never pass `--effort` with an empty string** — omit the flag entirely when no
+effort level is specified.
+
+**`--sandbox` vs file deliverables:** `--sandbox` prevents the agent from writing
+files. For analysis-only consultations, use it. For consultations that must
+generate files (HTML mockups, landing pages, design systems), **omit `--sandbox`**
+and rely on the role clause to constrain writes to the output directory. Always
+run `git status` after (Step 4) to catch any unexpected writes.
 
 `--print-timeout 1h` prevents the default 5-min headless timeout from killing
 the process before it finishes.

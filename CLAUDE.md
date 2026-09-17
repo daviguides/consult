@@ -52,11 +52,46 @@ consult/
 
 ---
 
-## Releasing
+## Releasing — mandatory workflow
 
-When creating a new version:
+Every plugin modification MUST follow this sequence. No exceptions.
 
-1. Update `.claude-plugin/plugin.json` version field
-2. Commit the version bump
-3. Create annotated tag: `git tag -a vX.Y.Z -m "message"`
-4. Push with tag: `git push && git push origin vX.Y.Z`
+### 1. Bump version
+
+Patch for fixes/tweaks, minor for new skills or behavioral changes.
+Update `.claude-plugin/plugin.json` and `install.sh` header.
+
+### 2. Commit and push
+
+```bash
+git add -A && git commit -m "bump: vX.Y.Z — <what changed>"
+git tag -a vX.Y.Z -m "<what changed>"
+git push && git push origin vX.Y.Z
+```
+
+### 3. Run install.sh
+
+```bash
+~/work/sources/continuum/gradients/consult/install.sh
+```
+
+install.sh clones from GitHub remote — push must land first.
+
+### 4. Verify cache is not stale
+
+The plugin cache (`~/.claude/plugins/cache/daviguides/consult/`) is
+unstable — even after install, it can preserve stale state. install.sh
+now patches `installed_plugins.json` and rebuilds the cache, but always
+verify:
+
+```bash
+diff <(ls -lR ~/.claude/consult/skills/) <(ls -lR consult/skills/)
+ls ~/.claude/plugins/cache/daviguides/consult/
+```
+
+If stale, nuke and reinstall:
+
+```bash
+rm -rf ~/.claude/plugins/cache/daviguides/consult/ ~/.claude/consult/
+./install.sh
+```
