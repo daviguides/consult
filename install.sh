@@ -197,7 +197,7 @@ fix_installed_plugins_registry() {
   local current_version
   current_version=$(python3 -c "
 import json
-with open('$TMP_DIR/$SOURCE_SUBDIR/.claude-plugin/plugin.json') as f:
+with open('$TMP_DIR/.claude-plugin/plugin.json') as f:
     print(json.load(f)['version'])
 " 2>/dev/null) || return 0
 
@@ -261,16 +261,16 @@ setup_marketplace() {
   if [ "$result" = "UPDATED" ]; then
     status_ok "Registry updated to current version"
     local current_version
-    current_version=$(python3 -c "import json; print(json.load(open('$TMP_DIR/$SOURCE_SUBDIR/.claude-plugin/plugin.json'))['version'])" 2>/dev/null)
+    current_version=$(python3 -c "import json; print(json.load(open('$TMP_DIR/.claude-plugin/plugin.json'))['version'])" 2>/dev/null)
     if [ -n "$current_version" ]; then
       local versioned_cache="$CLAUDE_DIR/plugins/cache/daviguides/consult/$current_version"
       rm -rf "$CLAUDE_DIR/plugins/cache/daviguides/consult"
       mkdir -p "$versioned_cache"
       if command -v rsync >/dev/null 2>&1; then
-        rsync -a "$TMP_DIR/$SOURCE_SUBDIR"/ "$versioned_cache"/ --exclude .git
+        rsync -a "$TMP_DIR"/ "$versioned_cache"/ --exclude .git
       else
-        cp -R "$TMP_DIR/$SOURCE_SUBDIR"/* "$versioned_cache"/
-        cp -R "$TMP_DIR/$SOURCE_SUBDIR"/.claude-plugin "$versioned_cache"/
+        cp -R "$TMP_DIR"/* "$versioned_cache"/
+        cp -R "$TMP_DIR"/.claude-plugin "$versioned_cache"/
       fi
       status_ok "Cache rebuilt at $current_version"
     fi
