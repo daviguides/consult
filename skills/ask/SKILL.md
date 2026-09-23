@@ -6,7 +6,7 @@ description: |
   inheriting session context (fork) or via external CLI (agy/kimi).
 
   Supported targets: opus, fable, kimi, agy, codex, all.
-  - opus/fable: Native subagent inside Claude Code when model selection is supported; Claude CLI elsewhere. Opus resolves to Opus 5.5 (`claude-opus-5-5`).
+  - opus/fable: Native subagent inside Claude Code when model selection is supported; Claude CLI elsewhere. Opus resolves to Opus 5.5 (`claude-opus-5-5`), Fable to Fable 5.1 (`claude-fable-5-1`).
   - kimi: Kimi Code CLI (`kimi -p` with `-m kimi-code/k3`).
   - agy: Antigravity CLI (`agy --print-timeout 1h -p` with `--model gemini-3.8-flash-high`). Always use model slug, never display name. Omit `--effort` flag if no value (empty string = silent failure). Omit `--sandbox` when writing files.
   - codex: OpenAI Codex CLI (`codex exec --model gpt-6-astra -c 'model_reasoning_effort="low"'`). Requires codex CLI installed.
@@ -54,7 +54,7 @@ Parse $ARGUMENTS to determine which consultant(s) to use:
 | Argument | Target | Method |
 |----------|--------|--------|
 | `opus` | Claude Opus 5.5 (`claude-opus-5-5`) | Claude Code native subagent when supported; otherwise `claude -p --model opus` |
-| `fable` | Claude Fable | Claude Code native subagent when supported; otherwise `claude -p --model fable` |
+| `fable` | Claude Fable 5.1 (`claude-fable-5-1`) | Claude Code native subagent when supported; otherwise `claude -p --model fable` |
 | `kimi` | Kimi K3 (Moonshot) | CLI: `kimi -p ... -m kimi-code/k3` |
 | `agy` | Gemini 3.8 Flash | CLI: `agy --print-timeout 1h -p ... --model gemini-3.8-flash-high` |
 | `codex` | OpenAI Codex | CLI: `codex exec --model gpt-6-astra -c 'model_reasoning_effort="low"' ...` (requires codex CLI) |
@@ -417,9 +417,9 @@ If any target fails (service error, timeout, rate limit):
 |------|--------|-----|
 | Adversarial code review | opus | Opus 5.5 -- strong output verification (benchmark-proven) |
 | Agentic architecture for Claude-based systems | opus | Opus 5.5 -- understands Claude behavior from inside |
-| Design of long-horizon / multi-day agent systems | fable | Purpose-built for sustained autonomous execution |
-| Prompt engineering for Claude | fable | Creative+analytical blend, better phrasings |
-| Problem reframing / naming abstractions | fable | Lateral thinking + analytical together |
+| Design of long-horizon / multi-day agent systems | fable | Fable 5.1 -- purpose-built for sustained autonomous execution |
+| Prompt engineering for Claude | fable | Fable 5.1 -- creative+analytical blend, better phrasings |
+| Problem reframing / naming abstractions | fable | Fable 5.1 -- lateral thinking + analytical together |
 | OpenAI ecosystem / API behavior questions | codex | Native OpenAI knowledge, different family |
 | Maximum coverage | all | Parallel diverse perspectives |
 
