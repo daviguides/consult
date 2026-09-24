@@ -6,7 +6,8 @@ description: |
   inheriting session context (fork) or via external CLI (agy/kimi).
 
   Supported targets: opus, fable, kimi, agy, codex, all.
-  - opus/fable: Always via Claude CLI (`claude -p --model claude-opus-5-5` / `claude-fable-5-1`). Agent tool cannot guarantee model version -- aliases resolve to session default, explicit IDs rejected.
+  - opus: Always via Claude CLI (`claude -p --model claude-opus-5-5`). Agent tool `model: "opus"` resolves to session default, not Opus 5.5.
+  - fable: Native subagent inside Claude Code (`model: "fable"`) when supported; Claude CLI (`claude -p --model claude-fable-5-1`) elsewhere.
   - kimi: Kimi Code CLI (`kimi -p` with `-m kimi-code/k3`).
   - agy: Antigravity CLI (`agy --print-timeout 1h -p` with `--model gemini-3.8-flash-high`). Always use model slug, never display name. Omit `--effort` flag if no value (empty string = silent failure). Omit `--sandbox` when writing files.
   - codex: OpenAI Codex CLI (`codex exec --model gpt-6-astra -c 'model_reasoning_effort="low"'`). Requires codex CLI installed.
@@ -53,8 +54,8 @@ Parse $ARGUMENTS to determine which consultant(s) to use:
 
 | Argument | Target | Method |
 |----------|--------|--------|
-| `opus` | Claude Opus 5.5 (`claude-opus-5-5`) | Claude Code native subagent when supported; otherwise `claude -p --model opus` |
-| `fable` | Claude Fable 5.1 (`claude-fable-5-1`) | Claude Code native subagent when supported; otherwise `claude -p --model fable` |
+| `opus` | Claude Opus 5.5 (`claude-opus-5-5`) | Always CLI: `claude -p --model claude-opus-5-5` |
+| `fable` | Claude Fable 5.1 (`claude-fable-5-1`) | Claude Code native subagent (`model: "fable"`); CLI fallback: `claude -p --model claude-fable-5-1` |
 | `kimi` | Kimi K3 (Moonshot) | CLI: `kimi -p ... -m kimi-code/k3` |
 | `agy` | Gemini 3.8 Flash | CLI: `agy --print-timeout 1h -p ... --model gemini-3.8-flash-high` |
 | `codex` | OpenAI Codex | CLI: `codex exec --model gpt-6-astra -c 'model_reasoning_effort="low"' ...` (requires codex CLI) |
@@ -204,37 +205,21 @@ to a file and instruct the user to run interactively via `!` in Claude Code:
 ! agy --sandbox --dangerously-skip-permissions --model "<model>" -p "$(cat <prompt-file>)"
 ```
 
-### For opus/fable (always CLI)
+### For opus (always CLI)
 
-**The Agent tool CANNOT be used for opus/fable consultations.** The Agent tool's
-`model` parameter accepts only aliases (`opus`, `fable`) which resolve to the
-session's own model version -- not necessarily the latest. Explicit model IDs
-(e.g. `claude-opus-5-5`) are rejected with `InputValidationError`. There is no
-way to guarantee the consultation runs on Opus 5.5 or Fable 5.1 via the Agent
-tool.
-
-**Always use the Claude CLI path below** -- it accepts explicit model IDs and
-guarantees the correct model version.
-
-#### Claude CLI path
+**The Agent tool CANNOT be used for opus consultations.** The Agent tool's
+`model: "opus"` alias resolves to the session's own Opus version (e.g. 4.6),
+not Opus 5.5. Explicit model IDs (e.g. `claude-opus-5-5`) are rejected with
+`InputValidationError`.
 
 Check `claude` is installed. If absent, report "claude CLI not installed" and
-skip that target. Launch with nohup:
+skip. Launch with nohup:
 
 ```bash
 nohup claude -p --model claude-opus-5-5 --tools "" --strict-mcp-config "<built prompt>" \
   > /tmp/consult-report-opus.md 2>&1 &
 echo $!
-# For the fable target instead:
-nohup claude -p --model claude-fable-5-1 --tools "" --strict-mcp-config "<built prompt>" \
-  > /tmp/consult-report-fable.md 2>&1 &
-echo $!
 ```
-
-**Always use explicit model IDs** (`claude-opus-5-5`, `claude-fable-5-1`), not
-aliases. Aliases resolve to the CLI's default, which may not match the intended
-version. If the account or CLI rejects the requested model, report that target
-as unavailable instead of substituting another model.
 
 CLI safety: run with cwd OUTSIDE the project repo. Do NOT pass `--add-dir`.
 `--tools ""` disables built-in tools and `--strict-mcp-config` excludes configured
@@ -243,6 +228,26 @@ not inherit the parent conversation. Pass the prompt through a structured
 argument or stdin with proper shell quoting, never unescaped interpolation.
 If Claude Code rejects a nested CLI session, report the limitation rather than
 clearing its nesting guard or bypassing it.
+
+### For fable (Agent tool preferred, CLI fallback)
+
+- **Inside Claude Code:** use the Agent tool with `model: "fable"`. Use an
+  available subagent type; do not assume a `fork` type exists. Inherit context
+  only if the tool supports it; otherwise include the full consultation prompt.
+  If model selection is unsupported or rejected, use the CLI path below.
+- **Inside Codex or another host, or if the host is uncertain:** go directly to
+  the Claude CLI.
+
+#### Fable CLI fallback
+
+```bash
+nohup claude -p --model claude-fable-5-1 --tools "" --strict-mcp-config "<built prompt>" \
+  > /tmp/consult-report-fable.md 2>&1 &
+echo $!
+```
+
+Same CLI safety rules as opus above. If the account or CLI rejects the requested
+model, report that target as unavailable instead of substituting another model.
 
 ### For kimi (CLI only)
 
