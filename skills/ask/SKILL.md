@@ -6,7 +6,7 @@ description: |
   inheriting session context (fork) or via external CLI (agy/kimi).
 
   Supported targets: opus, fable, kimi, agy, codex, all.
-  - opus/fable: Native subagent inside Claude Code when model selection is supported; Claude CLI elsewhere. Opus resolves to Opus 5.5 (`claude-opus-5-5`), Fable to Fable 5.1 (`claude-fable-5-1`).
+  - opus/fable: Always via Claude CLI (`claude -p --model claude-opus-5-5` / `claude-fable-5-1`). Agent tool cannot guarantee model version -- aliases resolve to session default, explicit IDs rejected.
   - kimi: Kimi Code CLI (`kimi -p` with `-m kimi-code/k3`).
   - agy: Antigravity CLI (`agy --print-timeout 1h -p` with `--model gemini-3.8-flash-high`). Always use model slug, never display name. Omit `--effort` flag if no value (empty string = silent failure). Omit `--sandbox` when writing files.
   - codex: OpenAI Codex CLI (`codex exec --model gpt-6-astra -c 'model_reasoning_effort="low"'`). Requires codex CLI installed.
@@ -204,24 +204,17 @@ to a file and instruct the user to run interactively via `!` in Claude Code:
 ! agy --sandbox --dangerously-skip-permissions --model "<model>" -p "$(cat <prompt-file>)"
 ```
 
-### For opus/fable (route by host environment)
+### For opus/fable (always CLI)
 
-Determine the host from the session's runtime identity and exposed tool schemas.
-The presence of `claude` on PATH only establishes CLI availability; it does not
-mean the current agent is running inside Claude Code.
+**The Agent tool CANNOT be used for opus/fable consultations.** The Agent tool's
+`model` parameter accepts only aliases (`opus`, `fable`) which resolve to the
+session's own model version -- not necessarily the latest. Explicit model IDs
+(e.g. `claude-opus-5-5`) are rejected with `InputValidationError`. There is no
+way to guarantee the consultation runs on Opus 5.5 or Fable 5.1 via the Agent
+tool.
 
-- **Inside Claude Code:** use its native Agent tool only when the exposed schema
-  supports explicit selection of the requested model (`opus` or `fable`). Use an
-  available subagent type; do not assume a `fork` type exists. Inherit context
-  only if the tool supports it; otherwise include the full consultation prompt.
-  If model selection is unsupported or rejected, use the CLI path below.
-- **Inside Codex or another host, or if the host is uncertain:** go directly to
-  the Claude CLI. Do not attempt to select Anthropic models through that host's
-  native subagent tool.
-
-Use tool/runtime metadata when available to verify model selection. An agent's
-self-reported identity is not evidence of its actual model. If metadata is
-unavailable, report the requested model without claiming it was verified.
+**Always use the Claude CLI path below** -- it accepts explicit model IDs and
+guarantees the correct model version.
 
 #### Claude CLI path
 
@@ -229,18 +222,19 @@ Check `claude` is installed. If absent, report "claude CLI not installed" and
 skip that target. Launch with nohup:
 
 ```bash
-nohup claude -p --model opus --tools "" --strict-mcp-config "<built prompt>" \
+nohup claude -p --model claude-opus-5-5 --tools "" --strict-mcp-config "<built prompt>" \
   > /tmp/consult-report-opus.md 2>&1 &
 echo $!
 # For the fable target instead:
-nohup claude -p --model fable --tools "" --strict-mcp-config "<built prompt>" \
+nohup claude -p --model claude-fable-5-1 --tools "" --strict-mcp-config "<built prompt>" \
   > /tmp/consult-report-fable.md 2>&1 &
 echo $!
 ```
 
-Use the alias matching the requested target; preserve an explicit full model ID
-if the user supplies one. If the account or CLI rejects the requested model,
-report that target as unavailable instead of substituting another model.
+**Always use explicit model IDs** (`claude-opus-5-5`, `claude-fable-5-1`), not
+aliases. Aliases resolve to the CLI's default, which may not match the intended
+version. If the account or CLI rejects the requested model, report that target
+as unavailable instead of substituting another model.
 
 CLI safety: run with cwd OUTSIDE the project repo. Do NOT pass `--add-dir`.
 `--tools ""` disables built-in tools and `--strict-mcp-config` excludes configured
