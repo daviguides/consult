@@ -118,7 +118,65 @@ Every consultation prompt follows this structure, in order:
 
 The user provides the question/context. The skill wraps it with the role clause and structure.
 
+### Brief discipline (mandatory for every target)
+
+1. **One brief, one file, every target.** Write the brief to a file (default
+   `/tmp/consult-brief.md`, or the user's output directory) and pass that same
+   file to every target, whole. Never a summary per model, never slices.
+   CLI targets take it as `"$(cat {brief_path})"`; native agents take it as the
+   prompt body or as a path to read first.
+
+2. **Two layers, named and separated.** The brief has a `## Decided` section
+   and a `## Open` section.
+   - `Decided` holds the user's decisions as fixed constraints, each with the
+     line "Do NOT propose alternatives to this. Find risks, gaps and gotchas
+     WITHIN it."
+   - `Open` holds what the consultation is for.
+   The bias the skill forbids is the **assistant's**: a preferred solution
+   smuggled into the questions, or questions tilted toward it. A user decision
+   is not bias. It is context, and it stays in the brief in full. Stripping user
+   decisions to make the brief "neutral" produces consultants that re-litigate
+   settled points and wastes the round.
+
+3. **The repository is the source of truth, not the brief.** For any
+   consultation about code, list the files the consultant MUST read before
+   answering, with the line "Read these before giving an opinion. Do NOT rely
+   on this brief alone." A consultant answering only from the brief is echoing
+   the assistant, which is not a second opinion. Paths in the list must be
+   verified to exist; a wrong path sends the consultant guessing.
+
+4. **Name the reference.** When a pattern exists to follow (a module, a
+   service, a prior design), the brief names its path and says "this is the
+   pattern to follow".
+
+5. **Closed questions when there are decisions.** With a `Decided` section,
+   questions ask about risk, missing pieces and gotchas inside the decisions.
+   Open "what would you do" questions belong only to exploration with nothing
+   decided. A consultant that returns file reads and no synthesis is the symptom
+   of a brief that was too open: the budget went to deciding things already
+   decided.
+
 ## Step 3: Execute Consultation
+
+### cwd: outside the repo by default, inside it for code consultations
+
+The per-target sections below say "run with cwd OUTSIDE the project repo".
+That is the default for opinion-only consultations with no file list. When the
+brief lists files to read (Brief discipline, item 3), the consultant needs the
+tree:
+
+- **codex**: cwd in the repo (or worktree), `--sandbox read-only`,
+  `--skip-git-repo-check`.
+- **agy**: cwd in the repo, `--sandbox` on.
+- **claude** (opus/fable CLI): cwd in the repo, `--tools "Read,Grep,Glob"`
+  instead of `--tools ""`; still `--strict-mcp-config`.
+- **fable** (native Agent): the prompt names the repo path; the agent has
+  Read/Grep/Glob by default.
+- **kimi**: has no read-only sandbox flag. Keep cwd outside the repo and
+  inline the listed files' contents into its copy of the brief, or skip kimi
+  for that consultation and say so.
+
+Step 4 (`git status`) stays mandatory either way.
 
 ### MANDATORY: nohup + Monitor for All CLI Calls
 
@@ -391,6 +449,20 @@ Present consultant output with:
 - Actionable items separated from observations
 
 For `all`: synthesize across models, highlight consensus and disagreements.
+
+### Lost round rule
+
+A round is lost, and the defect is in the brief, when any target:
+- returns file reads with little or no synthesis, or
+- proposes an alternative to an item in `Decided`, or
+- answers a question the brief did not ask because the one it asked was vague.
+
+Fix the brief (constraints missing, questions too open, files not listed or
+wrong paths) and relaunch **every** target with the corrected brief. Do not
+keep the targets that "happened to work" and relaunch only the one that did
+not: they answered a different brief, and the synthesis would mix two rounds.
+Findings from the lost round that do not depend on the defect may be kept, and
+the report says which round each finding came from.
 
 ## Transient Unavailability
 
